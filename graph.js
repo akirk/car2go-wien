@@ -1,0 +1,532 @@
+// class for creating and animating the graph (and it's timeline)
+
+// constructor
+var Graph = function() {
+  // car data and each individual car2go found in portland by license
+  this.cars = window.cars;
+  this.ids = Object.keys(this.cars);
+
+  // the number of days tracked
+  this.nDays = app.data.numDays;
+
+  // the timestamp intervals in ms being tracked
+  this.interval = 600000; // 10 minutes
+
+  // the interval to update the graph with
+  this.speed = 300;
+
+  // the start of it
+  this.start = new Date(app.data.start);
+
+  // set the timestamp to be a clone of a date object at the first start
+  this.timestamp = +this.start;
+  this.end = app.data.end;
+
+  // get elements
+  this.gather();
+  // attach to elements
+  this.attach();
+
+  // get configuration for mapreduce and calculate
+  this.stats = this.defineStats();
+};
+
+// gather elements & element-related functions
+Graph.prototype.gather = function() {
+  // parent element
+  this.container = d3.select('#map');
+  // create an svg element
+  this.svg = this.svg ||
+    this.container.append('svg').attr('id', 'map-graph');
+
+  // the count text
+  this.count = d3.select('#count');
+
+  // time elements
+  this.day = {
+    element: d3.select('#day'),
+    // {day of week}
+    format: d3.time.format('%A')
+  };
+  this.time = {
+    element: d3.select('#time'),
+    // {12hour,space padded:minute} {AM/PM}
+    format: d3.time.format('%H:%M')
+  };
+
+  // timeline element
+  this.timeline = d3.select('#timeline');
+  // height of the timeline element
+  this.timeline.height = parseInt(
+    this.timeline.style('height').replace(/px/, '')
+  );
+
+  // collect scales
+  this.getScales();
+};
+
+// collect scales based on browser size
+Graph.prototype.getScales = function() {
+  this.xscale = d3.scale.linear()
+    .domain([+this.start, this.end])
+    .range([0, 600]);
+};
+
+timeline.bounds = timeline.getBoundingClientRect();
+
+// attach events to handlers
+Graph.prototype.attach = function() {
+  var thiz = this;
+  var timeline = this.timeline.node();
+
+  // take an event object and update the cars at the found x location
+  var getX = function(e) {
+    var x = e.pageX || e.clientX;
+    x -= timeline.bounds.left;
+    var timestamp = thiz.xscale.invert(x);
+    thiz.timestamp = +new Date(timestamp).getTenth();
+    thiz.stopAnimating = true;
+    thiz.update(thiz.timestamp);
+  };
+
+  // mouse move over the timeline
+  timeline.addEventListener('mousemove', throttle(getX, 15));
+  // touchmove on the timeline to update it
+  timeline.addEventListener('touchmove', throttle(getX, 15));
+  // touchstart on the timeline to stop updating
+  timeline.addEventListener('touchstart', function(e) {
+    e.preventDefault();
+    getX(e);
+  });
+  // touchend on the timeline to continue animating
+  timeline.addEventListener('touchend', function(e) {
+    e.preventDefault();
+    thiz.stopAnimating = false;
+    thiz.animate();
+  });
+
+  // mousing out of the timeline should start the animation again
+  var start = function() {
+    if (thiz.stopAnimating) {
+      thiz.stopAnimating = false;
+      thiz.animate();
+    }
+  };
+  this.container.node().addEventListener('mouseover', start);
+
+  window.addEventListener('resize', throttle(function() {
+    // cache the current timestamp
+    var timestamp = thiz.timestamp;
+
+    timeline.bounds = timeline.getBoundingClientRect();
+    // update the timeline
+    thiz.getScales();
+    thiz.drawTimepath();
+    thiz.drawTimeline();
+
+    // update the timestamp
+    thiz.timestamp = timestamp;
+  }, 25));
+};
+
+// draws the axis and ticks under the map
+Graph.prototype.stop = function() {
+    this.stopAnimating = true;
+};
+// draws the axis and ticks under the map
+Graph.prototype.drawTimeline = function() {
+  // clear any ticks previously drawn
+  this.timeline.select('.tick-container').remove();
+
+  var start = +this.start;
+  var end = this.end;
+
+  var container = this.timeline.append('svg:g')
+    .attr({
+      'class': 'tick-container',
+    })
+
+  // number of ticks we need
+  var ticks = (end - start) / this.interval;
+
+  // iterate from the first interval to the number of ticks found
+  // don't start at 0 to prevent drawing a tick on the left side of the page
+  for (var i = 1; i < ticks; i++) {
+    var attrs = {};
+
+    // small tick = every % 6 (1 hour)
+    // big tick = every % 36 (6 hours)
+    // divider = every day % 144 (24 hours)
+    if (i % 144 == 0) {
+      attrs = {
+        'class': 'divider',
+        'y1': this.timeline.height - 30
+      };
+    }
+    else if (i % 36 == 0) {
+      attrs = {
+        'class': 'big-tick',
+        'y1': this.timeline.height - 15
+      };
+    }
+    else if (i % 6 == 0) {
+      attrs = {
+        'class': 'small-tick',
+        'y1': this.timeline.height - 5
+      }
+    }
+
+    // if we found an interval for the tick
+    if (attrs.y1 != null) {
+      // get the x-coordinate from the tick scale
+      var x = this.xscale(start + (i * this.interval));
+
+      // append a tick mark
+      container.append('svg:line')
+        .attr(attrs)
+        .attr({
+          'y2': this.timeline.height,
+          'x1': x,
+          'x2': x
+        })
+    }
+  }
+
+  var marker = d3.select('.time-marker');
+  // if the marker doesn't exist yet, create it
+  if (marker.empty()) {
+    marker = this.timeline.append('svg:line')
+      .attr({
+        'class': 'time-marker',
+        'y1': this.timeline.height - 20,
+        'y2': this.timeline.height
+      });
+  }
+  // otherwise, move it in front of the ticks by re-appending it to the DOM
+  else {
+    marker.remove();
+    this.timeline.node().appendChild(marker.node());
+  }
+};
+
+// draws the path element in the timeline
+Graph.prototype.drawTimepath = function() {
+  var thiz = this;
+
+  // yscale from 0 number cars found to the max num of cars is the
+  // total number found in the dataset
+  var yscale = d3.scale.linear()
+    .domain([0, this.ids.length])
+    .range([this.timeline.height, 0]);
+
+  // path function
+  var path = d3.svg.line()
+    .x(this.xscale)
+    .y(function(d) {
+      thiz.timestamp = d;
+      return yscale(thiz.calculate().numCars);
+    });
+
+  // area function
+  var area = d3.svg.area()
+    .x(this.xscale)
+    .y0(this.timeline.height)
+    .y1(function(d) {
+      thiz.timestamp = d;
+      return yscale(thiz.calculate().numCars);
+    });
+
+  // generate a range of time intervals between the start and end
+  var timestamps = d3.range(+this.start, this.end, this.interval);
+
+  var generatePath = function(className, dFunction) {
+    // remove any existing path first
+    thiz.timeline.selectAll('path.' + className).remove();
+    return thiz.timeline.selectAll('path.' + className)
+      .data([timestamps])
+      .enter()
+      .append('svg:path')
+      .attr({
+        'class': className,
+        'd': dFunction
+      });
+  };
+
+  generatePath('count-area', area);
+  // generatePath('count-path', path);
+
+  // reset timestamp to beginning
+  this.timestamp = +this.start;
+};
+
+Graph.prototype.animate = function(start, speed) {
+  var thiz = this;
+  // clear any existing animation loop
+  if (this['animation'] != null)
+    this.animation = clearTimeout(this.animation);
+
+  this.timestamp = start || this.timestamp;
+  speed = speed || this.speed;
+
+  // draw all cars hidden to start
+  this.circles = this.circles || this.svg.selectAll('.car')
+    .data(this.ids)
+    .enter()
+    .append('svg:circle')
+    .attr({
+      'class': 'car hide',
+      'r': 2,
+      'data-id': function(car) {
+        return car;
+      }
+    });
+
+  // set a timeout that can be cleared if this is being called again
+  var loop = function() {
+    thiz.update(thiz.timestamp, speed);
+    thiz.timestamp += thiz.interval;
+
+    thiz.animation = thiz.stopAnimating == true ?
+      // set the animation to undefined if told to stop udating
+      clearTimeout(thiz.animation) :
+      // if we're at a time greater than available, stop
+      thiz.timestamp > thiz.end ? clearTimeout(thiz.animation) :
+      // otherwise, keep animating
+      setTimeout(loop, speed);
+  };
+  loop();
+};
+
+// update the graph components and car positions
+Graph.prototype.update = function(timestamp, speed) {
+  timestamp = timestamp || this.timestamp;
+  speed = speed || this.speed; // FIXME for 0
+
+  // don't try to update if we're at a time beyond what we'll have data for
+  if (timestamp > this.end) return this.stop();
+
+  // redraw all the cars with the current timestamp
+  this.updateCars(timestamp);
+
+  // update mapreduce stats
+  this.data = this.calculate();
+
+  // update text stats
+  var date = new Date(timestamp).inWien();
+  this.day.element.text(this.day.format(date));
+  this.time.element.text(this.time.format(date));
+
+  // update the position of the timeline marker
+  document.id("numcars").innerHTML = this.data.numCars;
+  var x = this.xscale(timestamp);
+
+  // only animate when we're not updating FIXME
+  var marker = this.timeline.select('.time-marker');
+  var m = this.stopAnimating ?
+    marker : marker.transition().duration(speed).ease('linear');
+
+  m.attr({
+    'x1': x,
+    'x2': x
+  });
+}
+
+// updates the car positions according to the given timestamp
+Graph.prototype.updateCars = function(timestamp) {
+  var thiz = this;
+  if (timestamp == null) return;
+  // updates an individual car by it's id
+  var update = function(car) {
+    var loc = thiz.cars[car][timestamp];
+    var circle = d3.select(this);
+    // the car doesn't have a location for the timestamp
+    var prevTimestamp = circle.attr('data-timestamp');
+    var prevLoc = thiz.cars[car][prevTimestamp];
+
+    if (!loc) {
+      // if we're not animating and the car doesn't have a location, hide it
+      if (thiz.stopAnimating == true) {
+        circle
+          .classed('moving', false)
+          .classed('hide', true);
+        return;
+      }
+      // else if we're already moving, don't touch
+      else if (circle.classed('moving')) return;
+
+      // get an index of where the previous timestamp occured
+      var index = thiz.cars[car].locations.indexOf(prevTimestamp);
+
+      // find the next index
+      var nextLocTimestamp = thiz.cars[car].locations[index + 1];
+      // find the next location
+      var nextLoc = thiz.cars[car][nextLocTimestamp];
+
+      // if there is no next timestamp (ie, the car is unavailable and
+      // there we are still looping), the car should be hidden
+      if (nextLoc == null) {
+        circle.classed('hide', true);
+      }
+      // if the next location found is over 2 hours away, prevent from
+      // drifting the car slowly to it's next found location. it's not
+      // available at the current timestamp so hide it until..
+      // else
+      // if (+nextLocTimestamp - +prevTimestamp >= (2*Date.hour)) {
+        // circle.classed('hide', true);
+      // }
+      else
+      if (prevLoc != null && nextLocTimestamp != prevTimestamp && prevLoc[0] == nextLoc[0] && prevLoc[1] == nextLoc[1]) {
+        // circle.classed('hide', false);
+      }
+      // transfer the car towards it's next location
+      else {
+        // start the car moving and show it
+        circle.classed({ moving: true, hide: false });
+        // the difference in intervals between the next found timestamp
+        var intervals = (nextLocTimestamp - timestamp) / thiz.interval;
+        // next coords
+        var coords = thiz.getCoords(nextLoc);
+
+        // start the animation to the next location
+        circle.transition()
+          .ease('linear')
+          .duration(thiz.speed * intervals)
+          .attr({
+            cx: coords.x,
+            cy: coords.y
+          })
+          .each('end', function() {
+            d3.select(this).classed('moving', false);
+          });
+
+          if (!window.nolines) if (nextLoc[0] != prevLoc[0] || nextLoc[1] != prevLoc[1]) {
+            var prevCoords = thiz.getCoords(prevLoc);
+            var x1 = Math.floor(prevCoords.x * 100) / 100;
+            var y1 = Math.floor(prevCoords.y * 100) / 100;
+            var x2 = Math.floor(coords.x * 100) / 100;
+            var y2 = Math.floor(coords.y * 100) / 100;
+            l = thiz.svg.select("line[x1='" + x1 + "'][y1='" + y1 + "'][x2='" + x2 + "'][y2='" + y2 + "']");
+            if (l[0] && l[0][0]) {
+              l.style("stroke-opacity", Math.max(.4, l.style("stroke-opacity") + .1));
+            } else {
+              thiz.svg.append("svg:line")
+              .attr("x1", x1)
+              .attr("y1", y1)
+              .attr("x2", x2)
+              .attr("y2", y2)
+              .style("stroke", "rgb(6,120,155)")
+              .style("stroke-width", 1)
+              .style("stroke-opacity", .1);
+            }
+          }
+      }
+    }
+    else if (prevLoc != null) {
+      // start the car moving and show it
+      circle.classed({ moving: true, hide: false });
+      // next coords
+      var coords = thiz.getCoords(loc);
+
+      // start the animation to the next location
+      circle.transition()
+        .ease('linear')
+        .duration(thiz.speed)
+        .attr({
+          cx: coords.x,
+          cy: coords.y
+        })
+        .each('end', function() {
+          d3.select(this).classed('moving', false);
+        });
+        if (!window.nolines) if (loc[0] != prevLoc[0] || loc[1] != prevLoc[1]) {
+          var prevCoords = thiz.getCoords(prevLoc);
+          var x1 = Math.floor(prevCoords.x * 100) / 100;
+          var y1 = Math.floor(prevCoords.y * 100) / 100;
+          var x2 = Math.floor(coords.x * 100) / 100;
+          var y2 = Math.floor(coords.y * 100) / 100;
+          l = thiz.svg.select("line[x1='" + x1 + "'][y1='" + y1 + "'][x2='" + x2 + "'][y2='" + y2 + "']");
+          if (l[0] && l[0][0]) {
+            l.style("stroke-opacity", Math.max(.4, l.style("stroke-opacity") + .1));
+          } else {
+            thiz.svg.append("svg:line")
+            .attr("x1", x1)
+            .attr("y1", y1)
+            .attr("x2", x2)
+            .attr("y2", y2)
+            .style("stroke", "rgb(6,120,155)")
+            .style("stroke-width", 1)
+            .style("stroke-opacity", .1);
+          }
+        }
+      }
+    else {
+      // should only occur the first time the car is available, so
+      // show it and put it in it's location
+      var coords = thiz.getCoords(loc);
+      // end any existing transitions
+      circle.transition();
+      // move the circle to it's location
+      circle
+        // show the car and remove the moving class
+        .classed({ hide: false, moving: false })
+        .attr({
+          cx: coords.x,
+          cy: coords.y,
+          'data-timestamp': timestamp
+        });
+    }
+  };
+  this.circles.each(update);
+};
+
+// return an { x: x, y: y } object from a single location data
+Graph.prototype.getCoords = function(location) {
+  // 48.28243/16.26865 // links oben
+  // 48.14535/16.46918 // rechts unten
+  var x0 = 16.26865;
+  var y1 = 48.14535;
+  var lon_per_pixel = 0.0003342166666666676; // (16.46918 - 16.26865) / 600;
+  // var lon_per_pixel = 0.0001671083333333338; // (16.46918 - 16.26865) / 1200;
+  var lat_per_pixel = -0.0002451333333333376; // (48.14535 - 48.29243) / 600;
+  // var lat_per_pixel = -0.0001142333333333312; // (48.14535 - 48.29243) / 1200;
+  return {
+    x: (location[0] - x0) / lon_per_pixel,
+    y: 600 - (y1 - location[1]) / lat_per_pixel
+    // y: 1200 - (y1 - location[1]) / lat_per_pixel
+  };
+};
+
+// calculations on data
+Graph.prototype.calculate = function(data, stats) {
+  // default object of data to mapreduce on
+  data = data || this.cars;
+  // default stats object with mappings and reductions keys
+  stats = stats || this.stats || this.defineStats();
+
+  return mapreduce(data, stats.mappings, stats.reductions);
+};
+
+// a schema to mapreduce the dataset on
+Graph.prototype.defineStats = function() {
+  var thiz = this;
+
+  return {
+    mappings: {
+      // boolean value if there was a location found for the current
+      // configured timestamp
+      numCars: function(car) {
+        return car[thiz.timestamp] != null;
+      }
+    },
+
+    reductions: {
+      // return a count for the number of cars found with a location
+      // at the current timestamp
+      numCars: function(sum, haslocation) {
+        sum = sum || 0;
+        if (haslocation) sum += 1;
+        return sum;
+      }
+    }
+  }
+}

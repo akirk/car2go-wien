@@ -1,0 +1,258 @@
+h1, h2, h3 {
+  text-shadow: 0 -1px 0 #15bfde;
+}
+
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: Verdana, sans-serif;
+}
+
+a {
+  text-decoration: none;
+}
+
+body {
+  background-color: #80e1f3;
+  color: #555555;
+}
+.background {
+  height: 100%;
+  left: 0;
+  position: absolute;
+  top: 0;
+  width: 100%;
+  z-index: -1;
+}
+
+#color {
+  background-color: rgba(128, 225, 243, 0.85);
+}
+
+h1 {
+  font-weight: bold;
+  color: #fefefe;
+  font-size: 34px;
+  letter-spacing: 0.04em;
+  margin: 0;
+  padding: 10px 0 5px;
+  text-transform: uppercase;
+}
+@media (max-width: 500px) {
+  h1 {
+    font-size: 45px;
+  }
+}
+
+h2 {
+  font-weight: bold;
+  color: #fefefe;
+  font-size: 25px;
+  margin: 0;
+  letter-spacing: 0.04em;
+}
+
+h3 {
+  font-weight: normal;
+  color: #fdfefe;
+  font-size: 16px;
+  font-style: italic;
+  margin: 0;
+}
+
+.mobile h3 {
+  font-size: 20px;
+}
+
+#header {
+  margin: 5px 0 15px;
+  text-align: center;
+}
+
+#footer {
+  margin-top: 15px;
+  text-align: center;
+  padding-bottom: 2px;
+  text-transform: uppercase;
+}
+
+a {
+  -webkit-transition: color 0.05s linear;
+  -moz-transition: color 0.05s linear;
+  -ms-transition: color 0.05s linear;
+  transition: color 0.05s linear;
+  color: #555;
+  border-bottom: 1px solid #555;
+}
+a:hover {
+  color: #999;
+  border-bottom-color: #999;
+}
+
+.stats-container {
+  z-index: 3;
+  position: absolute;
+  margin: 5px;
+  color: #119fb9;
+}
+
+.stat, #loader h4 {
+  font-size: 28px;
+  font-weight: bold;
+  text-transform: uppercase;
+  white-space: nowrap;
+  clear: both;
+}
+
+#lines {
+  font-size: 10px;
+  float: left;
+}
+#cars {
+  text-align: right;
+  font-size: 10px;
+  margin-top: 3px;
+}
+
+#center {
+  margin-left: auto;
+  margin-right: auto;
+  width: 600px;
+}
+
+#map {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  border-bottom: 1px solid rgba(21, 191, 222, 0.7);
+  border-top: 1px solid rgba(21, 191, 222, 0.5);
+  position: relative;
+  background-image: url(wien-karte.png);
+  width: 600px;
+  height: 600px;
+}
+
+@media only screen and (-webkit-min-device-pixel-ratio: 2),
+    only screen and (-o-min-device-pixel-ratio: 2),
+    only screen and (min--moz-device-pixel-ratio: 2),
+    only screen and (min-device-pixel-ratio: 2) {
+        #map {background-image:url(wien-karte-2x.png);}
+}
+
+.overlay {
+}
+
+#map-graph {
+  height: 100%;
+  position: relative;
+  width: 100%;
+  z-index: 2;
+}
+
+.car {
+  fill: #15bfde;
+  stroke: #13abc7;
+  stroke-width: 1px;
+}
+.car.hide {
+  display: none;
+}
+
+#loader {
+  height: 100%;
+  left: 0;
+  position: absolute;
+  top: 0;
+  width: 100%;
+  z-index: 3;
+}
+#loader:after {
+  background-color: rgba(105, 219, 241, 0.85);
+  content: "";
+  height: 100%;
+  left: 0;
+  position: absolute;
+  top: 0;
+  width: 100%;
+  z-index: -1;
+}
+#loader.hide {
+  display: none;
+}
+#loader .load-container {
+  left: 15%;
+  position: absolute;
+  top: 25%;
+}
+#loader h4 {
+  display: inline-block;
+  font-size: 50px;
+  margin: 0;
+  position: relative;
+  top: 15px;
+  vertical-align: top;
+}
+#loader .load-animation {
+  display: inline-block;
+  height: 100px;
+  width: 100px;
+}
+#loader .big-circle {
+  fill: none;
+  stroke-width: 4px;
+  stroke: #119fb9;
+}
+#loader .tick {
+  stroke: #119fb9;
+  stroke-width: 4px;
+}
+
+.timeline-cover {
+  background: rgba(21, 191, 222, 0.4);
+  height: 60px;
+  position: absolute;
+  width: 600px;
+}
+
+#timeline {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  background: rgba(21, 191, 222, 0.4);
+  border-bottom: 1px solid #15bfde;
+  height: 60px;
+  margin: 0 auto;
+  width: 100%;
+}
+#timeline .time-marker {
+  stroke: #d56f6f;
+  stroke-width: 3px;
+  stroke-opacity: 0.9;
+  shape-rendering: crispEdges;
+}
+#timeline .count-path {
+  stroke: rgba(21, 191, 222, 0.7);
+  fill: none;
+}
+#timeline .count-area {
+  fill: #fff;
+  fill-opacity: 0.9;
+}
+#timeline line {
+  stroke: #80e1f3;
+  stroke-opacity: 1;
+  shape-rendering: crispEdges;
+}
+
+.mobile #timeline, .mobile .timeline-cover {
+  height: 75px;
+}
+
+#credits {
+  text-align: center;
+  font-size: 10px;
+  margin-top: 10px;
+}
